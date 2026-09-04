@@ -2,6 +2,7 @@ package concurrency
 
 import (
 	"time"
+	"fmt"
 )
 
 // =============================================================================
@@ -31,15 +32,25 @@ import (
 //
 // QUESTION: Where does the goroutine block? Before or after the sleep?
 func UnbufferedDemo() int {
-	// YOUR CODE HERE
-	return 0
+	ch := make(chan int)
+	go func() {
+		ch <- 42
+	}()
+	time.Sleep(time.Millisecond * 100)
+	value := <- ch
+	fmt.Println("reading from channel", value)
+	return value
+
 }
 
 // BufferedDemo demonstrates buffered channel behavior.
 // A buffered channel allows sends to complete without blocking (until full).
 func BufferedDemo() int {
-	// YOUR CODE HERE
-	return 0
+	ch := make(chan int, 10)
+	go func() {
+		ch <- 42
+	}()
+	return <- ch
 }
 
 // BufferFullDemo demonstrates what happens when a buffer fills up.
@@ -53,7 +64,14 @@ func BufferedDemo() int {
 //
 // QUESTION: What would happen if you didn't have the goroutine?
 func BufferFullDemo() bool {
-	// YOUR CODE HERE
+	ch := make(chan int, 2)
+	ch <- 1
+	ch <- 2
+	go func() {
+		time.Sleep(time.Millisecond * 500)
+		fmt.Println("reading from channel:", <- ch)
+	}()
+	ch <- 3
 	return true
 }
 
@@ -68,8 +86,22 @@ func BufferFullDemo() bool {
 // HINT: Use the "comma ok" idiom to detect when channel is exhausted
 // QUESTION: How many receives can you do? What do you get after the buffered values?
 func ClosedChannelReceive() []string {
-	// YOUR CODE HERE
-	return nil
+	ch := make(chan string, 2)
+	go func(){
+		ch <- "first"
+		ch <- "second"
+		close(ch)
+	}()
+
+	response := []string{}
+	for {
+		element, ok := <- ch
+		if !ok {
+			break
+		}
+		response = append(response, element)
+	}
+	return response
 }
 
 // RangeOverChannel demonstrates using range to receive until close.
@@ -82,8 +114,18 @@ func ClosedChannelReceive() []string {
 //
 // NOTE: range automatically stops when channel is closed
 func RangeOverChannel() int {
-	// YOUR CODE HERE
-	return 0
+	ch := make(chan int, 2)
+	go func(){
+		ch <- 1
+		ch <- 2
+		ch <- 3
+		close(ch)
+	}()
+	sum := 0
+	for val := range ch {
+		sum += val
+	}
+	return sum
 }
 
 // NilChannelBehavior demonstrates that nil channels block forever.
@@ -96,8 +138,13 @@ func RangeOverChannel() int {
 //
 // QUESTION: Why would you ever want a nil channel? (Hint: dynamic select cases)
 func NilChannelBehavior() string {
-	// YOUR CODE HERE
-	return ""
+	var ch chan int
+	select {
+	case <- time.After(100 * time.Millisecond) :
+		return "timeout"
+	case <- ch :
+		return "received"
+	}
 }
 
 // ChannelDirection demonstrates send-only and receive-only channel types.
@@ -107,19 +154,33 @@ func NilChannelBehavior() string {
 
 // generator creates values and sends them on a send-only channel
 func generator(out chan<- int, count int) {
-	// YOUR CODE HERE
+	defer close(out)
+	for i := range count {
+		out <- i
+	}
 }
 
 // squarer receives from one channel, squares, sends to another
 func squarer(in <-chan int, out chan<- int) {
-	// TODO: For each value from in, send its square to out
+	defer close(out)
+	for value := range in {
+		out <- value * value
+	}
 }
 
 // ChannelDirectionDemo ties it together
 // TODO: Create channels, wire up generator -> squarer, return sum of squares
 func ChannelDirectionDemo(count int) int {
-	// YOUR CODE HERE
-	return 0
+	ch := make(chan int)
+	ch_squared := make(chan int)
+
+	go generator(ch, count)
+	go squarer(ch, ch_squared)
+	sum := 0
+	for i := range ch_squared {
+		sum += i
+	}
+	return sum
 }
 
 // =============================================================================
